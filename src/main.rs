@@ -10,11 +10,14 @@ use carapax::{handler, types::Command};
 use carapax::{types::Message, HandlerResult};
 use carapax::{Api, Config};
 use carapax::{ErrorHandler, ErrorPolicy, HandlerError, LoggingErrorHandler};
+use cmd_lib::CmdResult;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::*;
 use std::os;
+use std::path::Path;
+use std::process;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::stream::{Stream, StreamExt};
 use tokio::sync::{mpsc, Mutex};
@@ -43,49 +46,78 @@ async fn main() {
         type Output = Result<()>;
 
         async fn handle(&mut self, context: &Api, input: Self::Input) -> Self::Output {
+            let mut response = String::new();
+
             if let Some(chat_id) = input.get_chat_id() {
                 // println!("input: {:?}", input);
                 if let UpdateKind::Message(msg) = input.kind {
-                    let mut response = String::new();
                     match msg.data {
                         MessageData::Photo { caption, data } => {
-                            let getfile = GetFile::new(&data[data.len() - 1].file_id);
+                            let getfile = GetFile::new(&data[0].file_id);
 
                             let y = context.execute(getfile).await;
                             if let Some(file_path) = &y.unwrap().file_path {
                                 let mut stream = context.download_file(file_path).await.unwrap();
+                                let mut new_file = File::create("foo.png")?;
+
                                 while let Some(chunk) = stream.next().await {
                                     let chunk = chunk.unwrap();
                                     // write chunk to something...
-                                    let mut new_file = File::create("foo.png")?;
-                                    let mut writer = BufWriter::new(new_file);
 
-                                    writer.write(&(*chunk));
-                                    println!("{:#?}", chunk);
+                                    // let mut writer = BufWriter::new(new_file);
+
+                                    new_file.write(&chunk);
+
+                                    let mut api =
+                                        leptess::tesseract::TessApi::new(Some("./tessdata"), "fin")
+                                            .unwrap();
+                                    let mut pix =
+                                        leptess::leptonica::pix_read(Path::new("./foo.png"))
+                                            .unwrap();
+                                    api.set_image(&pix);
+
+                                    let text = api.get_utf8_text();
+                                    response = text.unwrap();
+                                    // println!("{:#?}", chunk);
                                 }
                             }
                             // println!("{:#?}", y);
                             // println!("{:?}", context);
                         }
-                        MessageData::Sticker(x) => {
-                            let getfile = GetFile::new(&x.file_id);
-                            let y = context.execute(getfile).await;
-                            if let Some(file_path) = &y.unwrap().file_path {
-                                let mut stream = context.download_file(file_path).await.unwrap();
-                                while let Some(chunk) = stream.next().await {
-                                    let chunk = chunk.unwrap();
-                                    // write chunk to something...
-                                    let mut new_file = File::create("foo.webp")?;
-                                    let mut writer = BufWriter::new(new_file);
 
-                                    writer.write(&(*chunk));
-                                    println!("{:#?}", chunk);
-                                }
-                            }
+                        //Stickers coming soon!
+                        // MessageData::Sticker(x) => {
+                        //     let getfile = GetFile::new(&x.file_id);
+                        //     let y = context.execute(getfile).await;
+                        //     if let Some(file_path) = &y.unwrap().file_path {
+                        //         let mut stream = context.download_file(file_path).await.unwrap();
+                        //         let mut new_file = File::create("foo.webp")?;
 
-                            // println!("{:#?}", y);
-                            // println!("{:?}", x);
-                        }
+                        //         while let Some(chunk) = stream.next().await {
+                        //             let chunk = chunk.unwrap();
+                        //             // write chunk to something...
+
+                        //             // let mut writer = BufWriter::new(new_file);
+
+                        //             new_file.write(&chunk);
+
+                        //             let mut api =
+                        //                 leptess::tesseract::TessApi::new(Some("./tessdata"), "fin")
+                        //                     .unwrap();
+                        //             let mut pix =
+                        //                 leptess::leptonica::pix_read(Path::new("./foo.webp"))
+                        //                     .unwrap();
+                        //             api.set_image(&pix);
+
+                        //             let text = api.get_utf8_text();
+                        //             response = text.unwrap();
+                        //             // println!("{:#?}", chunk);
+                        //         }
+                        //     }
+
+                        //     // println!("{:#?}", y);
+                        //     // println!("{:?}", x);
+                        // }
                         (_) => (),
                     }
                 }
@@ -96,7 +128,7 @@ async fn main() {
                 //     },
                 //     (_) => (),
                 // }
-                context.execute(SendMessage::new(chat_id, "Hello!")).await;
+                context.execute(SendMessage::new(chat_id, response)).await;
             }
             Ok(())
         }

@@ -230,6 +230,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd_lib"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "475bd7aa7680b4ed8f6bb59745e882bcbaeb39326532bb79ffb1716480d9a274"
+
+[[package]]
 name = "core-foundation"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -653,6 +659,7 @@ name = "laudekoodibotti"
 version = "0.1.0"
 dependencies = [
  "carapax",
+ "cmd_lib",
  "leptess",
  "reqwest",
  "tokio",

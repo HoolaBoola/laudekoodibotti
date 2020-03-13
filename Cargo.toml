@@ -11,3 +11,4 @@ carapax = "0.5.0"
 tokio = {version = "0.2.13", features = ["full"]}
 leptess = "0.8.1"
 reqwest = "0.10.4"
+cmd_lib = "0.7.8"
