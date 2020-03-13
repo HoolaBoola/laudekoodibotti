@@ -1,6 +1,7 @@
 use carapax::longpoll::LongPoll;
 use carapax::methods::SendMessage;
 use carapax::types::Update;
+use carapax::types::UpdateKind;
 use carapax::Dispatcher;
 use carapax::{async_trait, ExecuteError, Handler};
 use carapax::{handler, types::Command};
@@ -11,7 +12,7 @@ use std::env;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::stream::{Stream, StreamExt};
 use tokio::sync::{mpsc, Mutex};
-use carapax::types::UpdateKind;
+use carapax::types::MessageData;
 
 #[tokio::main]
 async fn main() {
@@ -39,10 +40,20 @@ async fn main() {
         async fn handle(&mut self, context: &Api, input: Self::Input) -> Self::Output {
             if let Some(chat_id) = input.get_chat_id() {
                 // println!("input: {:?}", input);
-                match input.kind {
-                    UpdateKind::Message(Message) => println!("{:?}", Message.data),
-                    (_) => (),
+                if let UpdateKind::Message(msg) = input.kind {
+                    match msg.data {
+                        MessageData::Photo{caption, data} => println!("{:?}", caption),
+                        MessageData::Sticker(x) => println!("{:?}", x),
+                        (_) => (),
+                    }
                 }
+                // match input.kind {
+                //     UpdateKind::Message(Message) => {
+                //         if let
+                //         println!("{:?}", Message.data)
+                //     },
+                //     (_) => (),
+                // }
                 context.execute(SendMessage::new(chat_id, "Hello!")).await?;
             }
             Ok(())
