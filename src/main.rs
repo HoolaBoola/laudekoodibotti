@@ -68,17 +68,7 @@ async fn main() {
 
                                     new_file.write(&chunk);
 
-                                    let mut api =
-                                        leptess::tesseract::TessApi::new(Some("./tessdata"), "fin")
-                                            .unwrap();
-                                    let mut pix =
-                                        leptess::leptonica::pix_read(Path::new("./foo.png"))
-                                            .unwrap();
-                                    api.set_image(&pix);
-
-                                    let text = api.get_utf8_text();
-                                    response = text.unwrap();
-                                    // println!("{:#?}", chunk);
+                                    response = read_image("./foo.png");
                                 }
                             }
                             // println!("{:#?}", y);
@@ -86,38 +76,28 @@ async fn main() {
                         }
 
                         //Stickers coming soon!
-                        // MessageData::Sticker(x) => {
-                        //     let getfile = GetFile::new(&x.file_id);
-                        //     let y = context.execute(getfile).await;
-                        //     if let Some(file_path) = &y.unwrap().file_path {
-                        //         let mut stream = context.download_file(file_path).await.unwrap();
-                        //         let mut new_file = File::create("foo.webp")?;
+                        MessageData::Sticker(x) => {
+                            let file_id = &x.file_id;
 
-                        //         while let Some(chunk) = stream.next().await {
-                        //             let chunk = chunk.unwrap();
-                        //             // write chunk to something...
+                            if let Ok(file_data) = context.execute(GetFile::new(file_id)).await {
+                                if let Some(file_path) = file_data.file_path {
+                                    if let Ok(mut stream) = context.download_file(file_path).await {
+                                        let mut new_file = File::create("foo.webp");
+                                        if let Ok(mut file) = new_file {
+                                            while let Some(chunk) = stream.next().await {
+                                                let chunk = chunk.unwrap();
+                                                file.write(&chunk);
 
-                        //             // let mut writer = BufWriter::new(new_file);
+                                                response = read_image("./foo.webp");
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
-                        //             new_file.write(&chunk);
-
-                        //             let mut api =
-                        //                 leptess::tesseract::TessApi::new(Some("./tessdata"), "fin")
-                        //                     .unwrap();
-                        //             let mut pix =
-                        //                 leptess::leptonica::pix_read(Path::new("./foo.webp"))
-                        //                     .unwrap();
-                        //             api.set_image(&pix);
-
-                        //             let text = api.get_utf8_text();
-                        //             response = text.unwrap();
-                        //             // println!("{:#?}", chunk);
-                        //         }
-                        //     }
-
-                        //     // println!("{:#?}", y);
-                        //     // println!("{:?}", x);
-                        // }
+                            // println!("{:#?}", y);
+                            // println!("{:?}", x);
+                        }
                         (_) => (),
                     }
                 }
@@ -126,6 +106,14 @@ async fn main() {
             }
             Ok(())
         }
+    }
+    fn read_image(filename: &str) -> String {
+        let mut api = leptess::tesseract::TessApi::new(Some("./tessdata"), "fin").unwrap();
+        let mut pix = leptess::leptonica::pix_read(Path::new(filename)).unwrap();
+        api.set_image(&pix);
+
+        let text = api.get_utf8_text();
+        text.unwrap()
     }
 
     dispatcher.add_handler(UpdateHandler);
