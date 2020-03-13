@@ -13,6 +13,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::stream::{Stream, StreamExt};
 use tokio::sync::{mpsc, Mutex};
 use carapax::types::MessageData;
+use carapax::methods::GetFile;
 
 #[tokio::main]
 async fn main() {
@@ -42,8 +43,18 @@ async fn main() {
                 // println!("input: {:?}", input);
                 if let UpdateKind::Message(msg) = input.kind {
                     match msg.data {
-                        MessageData::Photo{caption, data} => println!("{:?}", caption),
-                        MessageData::Sticker(x) => println!("{:?}", x),
+                        MessageData::Photo{caption, data} => {
+                            let getfile = GetFile::new(&data[0].file_id);
+                            
+                            context.execute(getfile);
+                            // println!("{:?}", context);
+
+                        },
+                        MessageData::Sticker(x) => {
+                            let getfile = GetFile::new(&x.file_id);
+                            context.execute(getfile);
+                            // println!("{:?}", x);
+                        },
                         (_) => (),
                     }
                 }
