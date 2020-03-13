@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 carapax = "0.5.0"
 tokio = {version = "0.2.13", features = ["full"]}
+leptess = "0.8.1"

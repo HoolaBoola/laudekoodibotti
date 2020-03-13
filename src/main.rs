@@ -62,7 +62,9 @@ async fn main() {
 
         async fn handle(&mut self, context: &Api, input: Self::Input) -> Self::Output {
             if let Some(chat_id) = input.get_chat_id() {
-                context.execute(SendMessage::new(chat_id, "Hello!")).await?;
+                if let Some(file) = input.message() {
+                    context.execute(SendMessage::new(chat_id, "Hello!" + file)).await?;
+                }
             }
             Ok(())
         }
