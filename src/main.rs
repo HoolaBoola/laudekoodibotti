@@ -1,5 +1,7 @@
 use carapax::longpoll::LongPoll;
+use carapax::methods::GetFile;
 use carapax::methods::SendMessage;
+use carapax::types::MessageData;
 use carapax::types::Update;
 use carapax::types::UpdateKind;
 use carapax::Dispatcher;
@@ -12,8 +14,6 @@ use std::env;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::stream::{Stream, StreamExt};
 use tokio::sync::{mpsc, Mutex};
-use carapax::types::MessageData;
-use carapax::methods::GetFile;
 
 #[tokio::main]
 async fn main() {
@@ -43,18 +43,25 @@ async fn main() {
                 // println!("input: {:?}", input);
                 if let UpdateKind::Message(msg) = input.kind {
                     match msg.data {
-                        MessageData::Photo{caption, data} => {
+                        MessageData::Photo { caption, data } => {
                             let getfile = GetFile::new(&data[0].file_id);
-                            
-                            context.execute(getfile).await?;
-                            // println!("{:?}", context);
 
-                        },
+                            let y = context.execute(getfile).await?;
+                            if let Some(path) = &y.file_path {
+
+                            }
+                            println!("{:#?}", y);
+                            // println!("{:?}", context);
+                        }
                         MessageData::Sticker(x) => {
                             let getfile = GetFile::new(&x.file_id);
-                            context.execute(getfile).await?;
+                            let y = context.execute(getfile).await?;
+                            if let Some(path) = &y.file_path {
+
+                            }
+                            println!("{:#?}", y);
                             // println!("{:?}", x);
-                        },
+                        }
                         (_) => (),
                     }
                 }
