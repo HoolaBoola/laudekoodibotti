@@ -121,13 +121,7 @@ async fn main() {
                         (_) => (),
                     }
                 }
-                // match input.kind {
-                //     UpdateKind::Message(Message) => {
-                //         if let
-                //         println!("{:?}", Message.data)
-                //     },
-                //     (_) => (),
-                // }
+
                 context.execute(SendMessage::new(chat_id, response)).await;
             }
             Ok(())
