@@ -10,6 +10,7 @@ use carapax::{handler, types::Command};
 use carapax::{types::Message, HandlerResult};
 use carapax::{Api, Config};
 use carapax::{ErrorHandler, ErrorPolicy, HandlerError, LoggingErrorHandler};
+use std::collections::HashMap;
 use std::env;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::stream::{Stream, StreamExt};
@@ -42,13 +43,14 @@ async fn main() {
             if let Some(chat_id) = input.get_chat_id() {
                 // println!("input: {:?}", input);
                 if let UpdateKind::Message(msg) = input.kind {
+                    let mut response = String::new();
                     match msg.data {
                         MessageData::Photo { caption, data } => {
                             let getfile = GetFile::new(&data[0].file_id);
 
                             let y = context.execute(getfile).await?;
-                            if let Some(path) = &y.file_path {
-
+                            if let Some(file_path) = &y.file_path {
+                                let file = context.download_file(file_path);
                             }
                             println!("{:#?}", y);
                             // println!("{:?}", context);
@@ -56,8 +58,8 @@ async fn main() {
                         MessageData::Sticker(x) => {
                             let getfile = GetFile::new(&x.file_id);
                             let y = context.execute(getfile).await?;
-                            if let Some(path) = &y.file_path {
-
+                            if let Some(file_path) = &y.file_path {
+                                let file = context.download_file(file_path);
                             }
                             println!("{:#?}", y);
                             // println!("{:?}", x);
