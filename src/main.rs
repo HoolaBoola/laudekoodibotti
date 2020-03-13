@@ -46,13 +46,13 @@ async fn main() {
                         MessageData::Photo{caption, data} => {
                             let getfile = GetFile::new(&data[0].file_id);
                             
-                            context.execute(getfile);
+                            context.execute(getfile).await?;
                             // println!("{:?}", context);
 
                         },
                         MessageData::Sticker(x) => {
                             let getfile = GetFile::new(&x.file_id);
-                            context.execute(getfile);
+                            context.execute(getfile).await?;
                             // println!("{:?}", x);
                         },
                         (_) => (),
