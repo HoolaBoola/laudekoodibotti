@@ -8,6 +8,7 @@ use carapax::types::Update;
 use carapax::types::UpdateKind;
 use carapax::Api;
 use carapax::Dispatcher;
+use leptess::LepTess;
 use std::env;
 use std::fs::File;
 use std::io::Write;
@@ -24,23 +25,34 @@ async fn main() {
     // we use api client for this, but you can pass any struct.
     let mut dispatcher = Dispatcher::new(api.clone());
 
-    #[handler]
-    async fn handle_update(context: &Api, input: Update) {
-        println!("{:#?}", input);
+    dispatcher.add_handler(handle_update);
 
-        if let Some(chat_id) = input.get_chat_id() {
-            if let UpdateKind::Message(message) = &input.kind {
-                if let MessageData::Sticker(sticker) = &message.data {
-                    let file_id = &sticker.file_id;
+    // using long polling
+    LongPoll::new(api, dispatcher).run().await;
+}
 
-                    if let Ok(file_data) = context.execute(GetFile::new(file_id)).await {
-                        if let Some(file_path) = &file_data.file_path {
-                            if let Ok(stream) = context.download_file(file_path).await {
-                                if let Ok(content) =
-                                    stream.collect::<Result<Bytes, reqwest::Error>>().await
-                                {
-                                    if let Ok(mut file) = File::create("foo.webp") {
-                                        file.write_all(&content);
+#[handler]
+async fn handle_update(context: &Api, input: Update) {
+    println!("{:#?}", input);
+
+    if let Some(chat_id) = input.get_chat_id() {
+        if let UpdateKind::Message(message) = &input.kind {
+            if let MessageData::Sticker(sticker) = &message.data {
+                let file_id = &sticker.file_id;
+
+                if let Ok(file_data) = context.execute(GetFile::new(file_id)).await {
+                    if let Some(file_path) = &file_data.file_path {
+                        if let Ok(stream) = context.download_file(file_path).await {
+                            if let Ok(content) =
+                                stream.collect::<Result<Bytes, reqwest::Error>>().await
+                            {
+                                let filename = "foo.webp";
+
+                                if let Ok(mut file) = File::create(filename) {
+                                    if let Ok(_) = file.write_all(&content) {
+                                        if let Ok(text) = read_image(filename) {
+                                            context.execute(SendMessage::new(chat_id, &text)).await;
+                                        }
                                     }
                                 }
                             }
@@ -50,9 +62,14 @@ async fn main() {
             }
         }
     }
+}
 
-    dispatcher.add_handler(handle_update);
-
-    // using long polling
-    LongPoll::new(api, dispatcher).run().await;
+fn read_image(filename: &str) -> Result<String, ()> {
+    if let Ok(mut detector) = LepTess::new(Some("traineddata"), "eng") {
+        detector.set_image(filename);
+        if let Ok(text) = detector.get_utf8_text() {
+            return Ok(text);
+        }
+    }
+    return Err(());
 }
