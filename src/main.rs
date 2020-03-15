@@ -1,57 +1,57 @@
+use bytes::Bytes;
+use carapax::handler;
 use carapax::longpoll::LongPoll;
+use carapax::methods::GetFile;
 use carapax::methods::SendMessage;
+use carapax::types::MessageData;
 use carapax::types::Update;
+use carapax::types::UpdateKind;
+use carapax::Api;
 use carapax::Dispatcher;
-use carapax::{async_trait, ExecuteError, Handler};
-use carapax::{handler, types::Command};
-use carapax::{types::Message, HandlerResult};
-use carapax::{Api, Config};
-use carapax::{ErrorHandler, ErrorPolicy, HandlerError, LoggingErrorHandler};
 use std::env;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::stream::{Stream, StreamExt};
-use tokio::sync::{mpsc, Mutex};
+use std::fs::File;
+use std::io::Write;
+use tokio::stream::StreamExt;
 
 #[tokio::main]
 async fn main() {
     // Setup an API client:
-    let token: Vec<String> = env::args().collect();
-
-    let api = Api::new(&token[1]).unwrap();
+    // Token is given as first command line argument.
+    let args: Vec<String> = env::args().collect();
+    let api = Api::new(&args[1]).unwrap();
 
     // Dispatcher takes a context which will be passed to each handler
     // we use api client for this, but you can pass any struct.
     let mut dispatcher = Dispatcher::new(api.clone());
 
-    // You also can implement Handler for a struct:
-    struct UpdateHandler;
+    #[handler]
+    async fn handle_update(context: &Api, input: Update) {
+        println!("{:#?}", input);
 
-    // note: #[handler] macro expands to something like this
-    #[async_trait]
-    impl Handler<Api> for UpdateHandler {
-        // An object to handle (update, message, inline query, etc...)
-        type Input = Update;
-        // A result to return
-        // You can use Result<T, E>, HandlerResult or ()
-        type Output = Result<(), ExecuteError>;
+        if let Some(chat_id) = input.get_chat_id() {
+            if let UpdateKind::Message(message) = &input.kind {
+                if let MessageData::Sticker(sticker) = &message.data {
+                    let file_id = &sticker.file_id;
 
-        async fn handle(&mut self, context: &Api, input: Self::Input) -> Self::Output {
-            if let Some(chat_id) = input.get_chat_id() {
-                context.execute(SendMessage::new(chat_id, "Hello!")).await?;
+                    if let Ok(file_data) = context.execute(GetFile::new(file_id)).await {
+                        if let Some(file_path) = &file_data.file_path {
+                            if let Ok(stream) = context.download_file(file_path).await {
+                                if let Ok(content) =
+                                    stream.collect::<Result<Bytes, reqwest::Error>>().await
+                                {
+                                    if let Ok(mut file) = File::create("foo.webp") {
+                                        file.write_all(&content);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            Ok(())
         }
     }
 
-    dispatcher.add_handler(UpdateHandler);
-
-    // in order to catch errors occurred in handlers you can set an error hander:
-
-    // log error and go to the next handler
-    dispatcher.set_error_handler(LoggingErrorHandler::new(ErrorPolicy::Continue));
-    // by default dispatcher logs error and stops update propagation (next handler will not run)
-
-    // now you can start your bot:
+    dispatcher.add_handler(handle_update);
 
     // using long polling
     LongPoll::new(api, dispatcher).run().await;
