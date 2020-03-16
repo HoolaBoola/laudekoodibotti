@@ -38,20 +38,24 @@ async fn handle_update(context: &Api, input: Update) {
     if let Some(chat_id) = input.get_chat_id() {
         if let UpdateKind::Message(message) = &input.kind {
             if let MessageData::Sticker(sticker) = &message.data {
-                let file_id = &sticker.file_id;
+                if !sticker.is_animated {
+                    let file_id = &sticker.file_id;
 
-                if let Ok(file_data) = context.execute(GetFile::new(file_id)).await {
-                    if let Some(file_path) = &file_data.file_path {
-                        if let Ok(stream) = context.download_file(file_path).await {
-                            if let Ok(content) =
-                                stream.collect::<Result<Bytes, reqwest::Error>>().await
-                            {
-                                let filename = "foo.webp";
+                    if let Ok(file_data) = context.execute(GetFile::new(file_id)).await {
+                        if let Some(file_path) = &file_data.file_path {
+                            if let Ok(stream) = context.download_file(file_path).await {
+                                if let Ok(content) =
+                                    stream.collect::<Result<Bytes, reqwest::Error>>().await
+                                {
+                                    let filename = "foo.webp";
 
-                                if let Ok(mut file) = File::create(filename) {
-                                    if let Ok(_) = file.write_all(&content) {
-                                        if let Ok(text) = read_image(filename) {
-                                            context.execute(SendMessage::new(chat_id, &text)).await;
+                                    if let Ok(mut file) = File::create(filename) {
+                                        if let Ok(_) = file.write_all(&content) {
+                                            if let Ok(text) = read_image(filename) {
+                                                context
+                                                    .execute(SendMessage::new(chat_id, &text))
+                                                    .await;
+                                            }
                                         }
                                     }
                                 }
