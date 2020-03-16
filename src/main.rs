@@ -10,8 +10,8 @@ use carapax::Api;
 use carapax::Dispatcher;
 use leptess::LepTess;
 use std::env;
-use std::fs::File;
 use std::io::Write;
+use tempfile::NamedTempFile;
 use tokio::stream::StreamExt;
 
 #[tokio::main]
@@ -45,12 +45,12 @@ async fn handle_update(context: &Api, input: Update) {
 
             if let Some(file_id) = file_id {
                 if let Ok(content) = download_file_content(context, file_id).await {
-                    let filename = "foo";
-
-                    if let Ok(mut file) = File::create(filename) {
-                        if let Ok(_) = file.write_all(&content) {
-                            if let Ok(text) = read_image(filename) {
-                                context.execute(SendMessage::new(chat_id, &text)).await;
+                    if let Ok(mut tempfile) = NamedTempFile::new() {
+                        if let Ok(_) = tempfile.write_all(&content) {
+                            if let Some(tempfile_path) = tempfile.path().to_str() {
+                                if let Ok(text) = read_image(tempfile_path) {
+                                    context.execute(SendMessage::new(chat_id, &text)).await;
+                                }
                             }
                         }
                     }
@@ -73,10 +73,10 @@ async fn download_file_content(api: &Api, file_id: &str) -> Result<Bytes, ()> {
     return Err(());
 }
 
-fn read_image(filename: &str) -> Result<String, ()> {
-    if let Ok(mut detector) = LepTess::new(Some("traineddata"), "eng") {
-        detector.set_image(filename);
-        if let Ok(text) = detector.get_utf8_text() {
+fn read_image(file_path: &str) -> Result<String, ()> {
+    if let Ok(mut reader) = LepTess::new(Some("traineddata"), "eng") {
+        reader.set_image(file_path);
+        if let Ok(text) = reader.get_utf8_text() {
             return Ok(text);
         }
     }
