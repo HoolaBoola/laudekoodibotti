@@ -1,131 +1,84 @@
+use bytes::Bytes;
+use carapax::handler;
 use carapax::longpoll::LongPoll;
 use carapax::methods::GetFile;
 use carapax::methods::SendMessage;
 use carapax::types::MessageData;
 use carapax::types::Update;
 use carapax::types::UpdateKind;
+use carapax::Api;
 use carapax::Dispatcher;
-use carapax::{async_trait, ExecuteError, Handler};
-use carapax::{handler, types::Command};
-use carapax::{types::Message, HandlerResult};
-use carapax::{Api, Config};
-use carapax::{ErrorHandler, ErrorPolicy, HandlerError, LoggingErrorHandler};
-use cmd_lib::CmdResult;
-use std::collections::HashMap;
+use leptess::LepTess;
 use std::env;
-use std::fs::File;
-use std::io::*;
-use std::os;
-use std::path::Path;
-use std::process;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::stream::{Stream, StreamExt};
-use tokio::sync::{mpsc, Mutex};
+use std::io::Write;
+use tempfile::NamedTempFile;
+use tokio::stream::StreamExt;
 
 #[tokio::main]
 async fn main() {
     // Setup an API client:
-    let token: Vec<String> = env::args().collect();
-
-    let api = Api::new(&token[1]).unwrap();
+    // Token is given as first command line argument.
+    let args: Vec<String> = env::args().collect();
+    let api = Api::new(&args[1]).unwrap();
 
     // Dispatcher takes a context which will be passed to each handler
     // we use api client for this, but you can pass any struct.
     let mut dispatcher = Dispatcher::new(api.clone());
 
-    // You also can implement Handler for a struct:
-    struct UpdateHandler;
-
-    // note: #[handler] macro expands to something like this
-    #[async_trait]
-    impl Handler<Api> for UpdateHandler {
-        // An object to handle (update, message, inline query, etc...)
-        type Input = Update;
-        // A result to return
-        // You can use Result<T, E>, HandlerResult or ()
-        type Output = Result<()>;
-
-        async fn handle(&mut self, context: &Api, input: Self::Input) -> Self::Output {
-            let mut response = String::new();
-
-            if let Some(chat_id) = input.get_chat_id() {
-                // println!("input: {:?}", input);
-                if let UpdateKind::Message(msg) = input.kind {
-                    match msg.data {
-                        MessageData::Photo { caption, data } => {
-                            let getfile = GetFile::new(&data[0].file_id);
-
-                            let y = context.execute(getfile).await;
-                            if let Some(file_path) = &y.unwrap().file_path {
-                                let mut stream = context.download_file(file_path).await.unwrap();
-                                let mut new_file = File::create("foo.png")?;
-
-                                while let Some(chunk) = stream.next().await {
-                                    let chunk = chunk.unwrap();
-                                    // write chunk to something...
-
-                                    // let mut writer = BufWriter::new(new_file);
-
-                                    new_file.write(&chunk);
-
-                                    response = read_image("./foo.png");
-                                }
-                            }
-                            // println!("{:#?}", y);
-                            // println!("{:?}", context);
-                        }
-
-                        //Stickers coming soon!
-                        MessageData::Sticker(x) => {
-                            let file_id = &x.file_id;
-
-                            if let Ok(file_data) = context.execute(GetFile::new(file_id)).await {
-                                if let Some(file_path) = file_data.file_path {
-                                    if let Ok(mut stream) = context.download_file(file_path).await {
-                                        let mut new_file = File::create("foo.webp");
-                                        if let Ok(mut file) = new_file {
-                                            while let Some(chunk) = stream.next().await {
-                                                let chunk = chunk.unwrap();
-                                                file.write(&chunk);
-
-                                                response = read_image("./foo.webp");
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // println!("{:#?}", y);
-                            // println!("{:?}", x);
-                        }
-                        (_) => (),
-                    }
-                }
-
-                context.execute(SendMessage::new(chat_id, response)).await;
-            }
-            Ok(())
-        }
-    }
-    fn read_image(filename: &str) -> String {
-        let mut api = leptess::tesseract::TessApi::new(Some("./tessdata"), "fin").unwrap();
-        let mut pix = leptess::leptonica::pix_read(Path::new(filename)).unwrap();
-        api.set_image(&pix);
-
-        let text = api.get_utf8_text();
-        text.unwrap()
-    }
-
-    dispatcher.add_handler(UpdateHandler);
-
-    // in order to catch errors occurred in handlers you can set an error hander:
-
-    // log error and go to the next handler
-    dispatcher.set_error_handler(LoggingErrorHandler::new(ErrorPolicy::Continue));
-    // by default dispatcher logs error and stops update propagation (next handler will not run)
-
-    // now you can start your bot:
+    dispatcher.add_handler(handle_update);
 
     // using long polling
     LongPoll::new(api, dispatcher).run().await;
+}
+
+#[handler]
+async fn handle_update(context: &Api, input: Update) {
+    println!("{:#?}", input);
+
+    if let Some(chat_id) = input.get_chat_id() {
+        if let UpdateKind::Message(message) = &input.kind {
+            let file_id = match &message.data {
+                MessageData::Sticker(sticker) if !sticker.is_animated => Some(&sticker.file_id),
+                MessageData::Photo { data, .. } => data.last().map(|p| &p.file_id),
+                _ => None,
+            };
+
+            if let Some(file_id) = file_id {
+                if let Ok(content) = download_file_content(context, file_id).await {
+                    if let Ok(mut tempfile) = NamedTempFile::new() {
+                        if let Ok(_) = tempfile.write_all(&content) {
+                            if let Some(tempfile_path) = tempfile.path().to_str() {
+                                if let Ok(text) = read_image(tempfile_path) {
+                                    context.execute(SendMessage::new(chat_id, &text)).await;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn download_file_content(api: &Api, file_id: &str) -> Result<Bytes, ()> {
+    if let Ok(file_data) = api.execute(GetFile::new(file_id)).await {
+        if let Some(file_path) = file_data.file_path {
+            if let Ok(stream) = api.download_file(file_path).await {
+                if let Ok(content) = stream.collect::<Result<Bytes, reqwest::Error>>().await {
+                    return Ok(content);
+                }
+            }
+        }
+    }
+    return Err(());
+}
+
+fn read_image(file_path: &str) -> Result<String, ()> {
+    if let Ok(mut reader) = LepTess::new(Some("traineddata"), "eng") {
+        reader.set_image(file_path);
+        if let Ok(text) = reader.get_utf8_text() {
+            return Ok(text);
+        }
+    }
+    return Err(());
 }

@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 carapax = "0.5.0"
 tokio = {version = "0.2.13", features = ["full"]}
-leptess = "0.8.1"
+bytes = "0.5.4"
 reqwest = "0.10.4"
-cmd_lib = "0.7.8"
+leptess = "0.8.1"
+tempfile = "3.1.0"
