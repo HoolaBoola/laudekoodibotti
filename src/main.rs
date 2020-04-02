@@ -19,16 +19,23 @@ async fn main() {
     // Setup an API client:
     // Token is given as first command line argument.
     let args: Vec<String> = env::args().collect();
-    let api = Api::new(&args[1]).unwrap();
+    if args.len() < 2 {
+        println!("Telegram bot token must be given as an argument!");
+        return;
+    }
+    match Api::new(&args[1]) {
+        Ok(api) => {
+            // Dispatcher takes a context which will be passed to each handler
+            // we use api client for this, but you can pass any struct.
+            let mut dispatcher = Dispatcher::new(api.clone());
 
-    // Dispatcher takes a context which will be passed to each handler
-    // we use api client for this, but you can pass any struct.
-    let mut dispatcher = Dispatcher::new(api.clone());
+            dispatcher.add_handler(handle_update);
 
-    dispatcher.add_handler(handle_update);
-
-    // using long polling
-    LongPoll::new(api, dispatcher).run().await;
+            // using long polling
+            LongPoll::new(api, dispatcher).run().await;
+        }
+        Err(_) => println!("Error occurred while connecting to Telegram api!"),
+    }
 }
 
 #[handler]
