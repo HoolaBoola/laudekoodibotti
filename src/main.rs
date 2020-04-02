@@ -33,10 +33,9 @@ async fn main() {
 
 #[handler]
 async fn handle_update(context: &Api, input: Update) {
-    println!("{:#?}", input);
-
     if let Some(chat_id) = input.get_chat_id() {
         if let UpdateKind::Message(message) = &input.kind {
+            /* Stickers and photos are supported. */
             let file_id = match &message.data {
                 MessageData::Sticker(sticker) if !sticker.is_animated => Some(&sticker.file_id),
                 MessageData::Photo { data, .. } => data.last().map(|p| &p.file_id),
@@ -45,11 +44,12 @@ async fn handle_update(context: &Api, input: Update) {
 
             if let Some(file_id) = file_id {
                 if let Ok(content) = download_file_content(context, file_id).await {
+                    /* Create tempfile for the image so it will get deleted later. */
                     if let Ok(mut tempfile) = NamedTempFile::new() {
                         if let Ok(_) = tempfile.write_all(&content) {
                             if let Some(tempfile_path) = tempfile.path().to_str() {
                                 if let Ok(text) = read_image(tempfile_path) {
-                                    context.execute(SendMessage::new(chat_id, &text)).await;
+                                    let _ = context.execute(SendMessage::new(chat_id, &text)).await;
                                 }
                             }
                         }
@@ -74,6 +74,7 @@ async fn download_file_content(api: &Api, file_id: &str) -> Result<Bytes, ()> {
 }
 
 fn read_image(file_path: &str) -> Result<String, ()> {
+    /* English is probably the best guess for the text of an average sticker. */
     if let Ok(mut reader) = LepTess::new(Some("traineddata"), "eng") {
         reader.set_image(file_path);
         if let Ok(text) = reader.get_utf8_text() {
