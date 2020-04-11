@@ -666,8 +666,9 @@ checksum = "b294d6fa9ee409a054354afc4352b0b9ef7ca222c69b8812cbea9e7d2bf3783f"
 
 [[package]]
 name = "leptess"
-version = "0.8.1"
-source = "git+https://github.com/houqp/leptess?rev=2a1f8bc48b1fcba6550835b5869dd568caacfc85#2a1f8bc48b1fcba6550835b5869dd568caacfc85"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb3e4ed389079e8032550df355bfb5aa0385503512621a39667bc24647688fea"
 dependencies = [
  "leptonica-sys",
  "tesseract-sys",

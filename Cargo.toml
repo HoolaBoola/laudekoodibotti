@@ -11,5 +11,5 @@ carapax = "0.5.0"
 tokio = {version = "0.2.13", features = ["full"]}
 bytes = "0.5.4"
 reqwest = "0.10.4"
-leptess = {git = "https://github.com/houqp/leptess", rev = "2a1f8bc48b1fcba6550835b5869dd568caacfc85"}
+leptess = "0.8.2"
 tempfile = "3.1.0"
