@@ -1,5 +1,4 @@
 use bytes::Bytes;
-use carapax::handler;
 use carapax::longpoll::LongPoll;
 use carapax::methods::GetFile;
 use carapax::methods::SendMessage;
@@ -16,29 +15,24 @@ use tokio::stream::StreamExt;
 
 #[tokio::main]
 async fn main() {
-    // Setup an API client:
     // Token is given as first command line argument.
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        println!("Telegram bot token must be given as an argument!");
-        return;
-    }
-    match Api::new(&args[1]) {
-        Ok(api) => {
-            // Dispatcher takes a context which will be passed to each handler
-            // we use api client for this, but you can pass any struct.
-            let mut dispatcher = Dispatcher::new(api.clone());
+    let token = env::args()
+        .nth(1)
+        .expect("Telegram bot token must be given as an argument!");
 
-            dispatcher.add_handler(handle_update);
+    // Setup an API client:
+    let api = Api::new(token).expect("Error while connecting to Telegram api!");
 
-            // using long polling
-            LongPoll::new(api, dispatcher).run().await;
-        }
-        Err(_) => println!("Error occurred while connecting to Telegram api!"),
-    }
+    // Dispatcher takes a context which will be passed to each handler
+    // we use api client for this, but you can pass any struct.
+    let mut dispatcher = Dispatcher::new(api.clone());
+    dispatcher.add_handler(handle_update);
+
+    // Poll Telegram server for updates.
+    LongPoll::new(api, dispatcher).run().await;
 }
 
-#[handler]
+#[carapax::handler]
 async fn handle_update(context: &Api, input: Update) {
     if let Some(chat_id) = input.get_chat_id() {
         if let UpdateKind::Message(message) = &input.kind {
